@@ -18,9 +18,11 @@ limitations under the License.
 
 set -ex
 
+source /tmp/osd-common-ceph-disk.sh
+
 if [ "x${STORAGE_TYPE%-*}" == "xblock" ]; then
   OSD_DEVICE=$(readlink -f ${STORAGE_LOCATION})
-  ODEV=$(echo ${OSD_DEVICE} | sed 's/[0-9]//g' | cut -f 3 -d '/')
+  ODEV=$(echo $(diskdev_from_partition ${OSD_DEVICE}) | cut -f 3 -d '/')
   OSD_PATH=$(cat /proc/mounts | awk '/ceph-/{print $2}')
   OSD_STORE=$(cat ${OSD_PATH}/type)
   DATA_PART=$(cat /proc/mounts | awk '/ceph-/{print $1}')

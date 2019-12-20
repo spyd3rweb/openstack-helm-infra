@@ -109,6 +109,30 @@ function crush_location {
   fi
 }
 
+# Get disk device name and partition number from partition
+# (/dev/[hsv]d[0-9]|/dev/nvme[0-9]n[0-9]p[0-9])
+function devparts_from_partition {
+  local partition=${1}
+  local devparts=($(echo "${partition}" | grep -Eo -e '^(\/dev\/)?([hsv]d[a-z]{1,2})' -e '^(\/dev\/)?(nvme[0-9]n[0-9])' -e '[0-9]{1,2}$'))
+  echo "${devparts[@]}"
+}
+
+# Get disk device from partition
+function diskdev_from_partition {
+  local partition=${1}
+  local devparts=($(devparts_from_partition $partition))
+  local diskdev=${devparts[0]}
+  echo "${diskdev}"
+}
+
+# Get partition number from partition
+function partnum_from_partition {
+  local partition=${1}
+  local devparts=($(devparts_from_partition $partition))
+  local partnum=${devparts[1]}
+  echo "${partnum}"
+}
+
 # Calculate proper device names, given a device and partition number
 function dev_part {
   local osd_device=${1}
@@ -164,16 +188,22 @@ function zap_extra_partitions {
   # Discover journal, block.db, and block.wal partitions first before deleting anything
   # If the partitions are on the same disk, deleting one can affect discovery of the other(s)
   if [ -L "${mountpoint}/journal" ]; then
-    journal_disk=$(readlink -m ${mountpoint}/journal | sed 's/[0-9]*//g')
-    journal_part=$(readlink -m ${mountpoint}/journal | sed 's/[^0-9]*//g')
+    journal_partition=$(readlink -m ${mountpoint}/journal)
+    journal_devparts=($(devparts_from_partition $journal_partition))
+    journal_disk=${journal_devparts[0]}
+    journal_part=${journal_devparts[1]}
   fi
   if [ -L "${mountpoint}/block.db" ]; then
-    block_db_disk=$(readlink -m ${mountpoint}/block.db | sed 's/[0-9]*//g')
-    block_db_part=$(readlink -m ${mountpoint}/block.db | sed 's/[^0-9]*//g')
+    block_db_partition=$(readlink -m ${mountpoint}/block.db)
+    block_db_devparts=($(devparts_from_partition $block_db_partition))
+    block_db_disk=${block_db_devparts[0]}
+    block_db_part=${block_db_devparts[1]}
   fi
   if [ -L "${mountpoint}/block.wal" ]; then
-    block_wal_disk=$(readlink -m ${mountpoint}/block.wal | sed 's/[0-9]*//g')
-    block_wal_part=$(readlink -m ${mountpoint}/block.wal | sed 's/[^0-9]*//g')
+    block_wal_partition=$(readlink -m ${mountpoint}/block.wal)
+    block_wal_devparts=($(devparts_from_partition $block_wal_partition))
+    block_wal_disk=${block_wal_devparts[0]}
+    block_wal_part=${block_wal_devparts[1]}
   fi
 
   # Delete any discovered journal, block.db, and block.wal partitions
@@ -232,7 +262,7 @@ function udev_settle {
     if [ "x$JOURNAL_TYPE" == "xblock-logical" ] && [ ! -z "$OSD_JOURNAL" ]; then
       OSD_JOURNAL=$(readlink -f ${OSD_JOURNAL})
       if [ ! -z "$OSD_JOURNAL" ]; then
-        local JDEV=$(echo ${OSD_JOURNAL} | sed 's/[0-9]//g')
+        local JDEV=$(diskdev_from_partition $OSD_JOURNAL)
         partprobe "${JDEV}"
       fi
     fi
@@ -242,10 +272,11 @@ function udev_settle {
 
   # On occassion udev may not make the correct device symlinks for Ceph, just in case we make them manually
   mkdir -p /dev/disk/by-partuuid
-  for dev in $(awk '!/rbd/{print $4}' /proc/partitions | grep "[0-9]"); do
-    diskdev=$(echo "${dev//[!a-z]/}")
-    partnum=$(echo "${dev//[!0-9]/}")
-    ln -s "../../${dev}" "/dev/disk/by-partuuid/$(sgdisk -i ${partnum} /dev/${diskdev} | awk '/Partition unique GUID/{print tolower($4)}')" || true
+  for partition in $(awk '!/rbd/{print $4}' /proc/partitions | grep -E '[0-9]{1,2}$' | grep -Ev '[0-9][n][0-9]{1,2}$'); do
+    devparts=($(devparts_from_partition $partition))
+    diskdev=${devparts[0]}
+    partnum=${devparts[1]}
+    ln -s "../../${partition}" "/dev/disk/by-partuuid/$(sgdisk -i ${partnum} /dev/${diskdev} | awk '/Partition unique GUID/{print tolower($4)}')" || true
   done
 }
 

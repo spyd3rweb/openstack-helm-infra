@@ -85,7 +85,7 @@ function osd_disk_prepare {
               local osd_id=$(cat "${tmpmnt}/whoami")
               if [ ! -b "${OSD_JOURNAL_DISK}" ]; then
                 OSD_JOURNAL=$(readlink -f ${OSD_JOURNAL})
-                local jdev=$(echo ${OSD_JOURNAL} | sed 's/[0-9]//g')
+                local jdev=$(diskdev_from_partition $OSD_JOURNAL)
                 if [ ${jdev} == ${OSD_JOURNAL} ]; then
                   echo "It appears that ${OSD_DEVICE} is missing the journal at ${OSD_JOURNAL}."
                   echo "Because OSD_FORCE_REPAIR is set, we will wipe the metadata of the OSD and zap it."
@@ -183,8 +183,8 @@ function osd_disk_prepare {
 
 function osd_journal_create {
   local osd_journal=${1}
-  local osd_journal_partition=$(echo ${osd_journal} | sed 's/[^0-9]//g')
-  local jdev=$(echo ${osd_journal} | sed 's/[0-9]//g')
+  local osd_journal_partition=$(partnum_from_partition $osd_journal)
+  local jdev=$(diskdev_from_partition $osd_journal)
   if [ -b "${jdev}" ]; then
     sgdisk --new=${osd_journal_partition}:0:+${OSD_JOURNAL_SIZE}M \
       --change-name='${osd_journal_partition}:ceph journal' \
@@ -202,8 +202,8 @@ function osd_journal_prepare {
   if [ -n "${OSD_JOURNAL}" ]; then
     if [ -b ${OSD_JOURNAL} ]; then
       OSD_JOURNAL=$(readlink -f ${OSD_JOURNAL})
-      OSD_JOURNAL_PARTITION=$(echo ${OSD_JOURNAL} | sed 's/[^0-9]//g')
-      local jdev=$(echo ${OSD_JOURNAL} | sed 's/[0-9]//g')
+      OSD_JOURNAL_PARTITION=$(partnum_from_partition $OSD_JOURNAL)
+      local jdev=$(diskdev_from_partition $OSD_JOURNAL)
       if [ -z "${OSD_JOURNAL_PARTITION}" ]; then
         OSD_JOURNAL=$(dev_part ${jdev} ${OSD_JOURNAL_PARTITION})
       else
