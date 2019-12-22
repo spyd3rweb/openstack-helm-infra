@@ -241,10 +241,12 @@ function udev_settle {
   partprobe "${OSD_DEVICE}"
   if [ "${OSD_BLUESTORE:-0}" -eq 1 ]; then
     if [ ! -z "$BLOCK_DB" ]; then
-      partprobe "${BLOCK_DB}"
+      local BLOCK_DB_DEV=$(diskdev_from_partition $BLOCK_DB)
+      partprobe "${BLOCK_DB_DEV}"
     fi
     if [ ! -z "$BLOCK_WAL" ] && [ "$BLOCK_WAL" != "$BLOCK_DB" ]; then
-      partprobe "${BLOCK_WAL}"
+      local BLOCK_WAL_DEV=$(diskdev_from_partition $BLOCK_WAL)
+      partprobe "${BLOCK_WAL_DEV}"
     fi
   else
     if [ "x$JOURNAL_TYPE" == "xblock-logical" ] && [ ! -z "$OSD_JOURNAL" ]; then
